@@ -1,4 +1,4 @@
-# Convenience package init so vendored modules can be imported as
-# `vendor.tph_yolov5.*` from the main project.
+# Convenience package init so bundled modules can be imported directly
+# as `tph_yolov5.*` from the project.
 
 from . import train  # noqa: F401
