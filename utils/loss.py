@@ -139,6 +139,8 @@ class ComputeLoss:
     def __call__(self, p, targets):  # predictions, targets, model
         device = targets.device
         lcls, lbox, lobj = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+        ciou_sum = torch.zeros(1, device=device)
+        ciou_cnt = torch.zeros(1, device=device)
         tcls, tbox, indices, anchors = self.build_targets(p, targets)  # targets
 
         # Losses
@@ -156,6 +158,8 @@ class ComputeLoss:
                 pbox = torch.cat((pxy, pwh), 1)  # predicted box
                 iou = bbox_iou(pbox.T, tbox[i], x1y1x2y2=False, CIoU=True)  # iou(prediction, target)
                 lbox += (1.0 - iou).mean()  # iou loss
+                ciou_sum += iou.detach().sum()
+                ciou_cnt += iou.numel()
 
                 # Objectness
                 score_iou = iou.detach().clamp(0).type(tobj.dtype)
@@ -187,7 +191,9 @@ class ComputeLoss:
         lcls *= self.hyp['cls']
         bs = tobj.shape[0]  # batch size
 
-        return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls)).detach()
+        ciou_mean = torch.where(ciou_cnt > 0, ciou_sum / ciou_cnt, torch.zeros_like(ciou_sum))
+        ciou_loss = 1.0 - ciou_mean
+        return (lbox + lobj + lcls) * bs, torch.cat((lbox, lobj, lcls, ciou_loss, ciou_mean)).detach()
 
     def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
